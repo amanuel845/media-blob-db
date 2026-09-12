@@ -1,5 +1,5 @@
 {
-  "name": "image-db-backend",
+  "name": "media-blob-db",
   "version": "1.0.0",
   "private": true,
   "type": "module",
