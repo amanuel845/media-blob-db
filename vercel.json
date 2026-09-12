@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "api/*": {
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/public/index.html"
+    }
+  ]
+}
