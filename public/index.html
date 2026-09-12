@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full overflow-hidden">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>BlobDB · Images and Videos DB</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/assets/tailwindcss-3.4.17.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Caveat:wght@700&display=swap" rel="stylesheet">
+  <style>
+    *::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
+    * { scrollbar-width: none; -ms-overflow-style: none; }
+
+    .clock-colon { animation: colon-blink 1s step-start infinite; }
+    @keyframes colon-blink { 50% { opacity: 0; } }
+
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .slideshow-loader i { animation: spin 1s linear infinite; }
+
+    #unlock-modal {
+      transition: opacity 0.3s ease;
+    }
+    #unlock-modal.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #unlock-modal:not(.hidden) {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #unlock-modal:not(.hidden) .modal-box {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+    #unlock-modal.hidden .modal-box {
+      opacity: 0;
+      transform: scale(0.95) translateY(8px);
+    }
+
+    .video-card:hover .video-play-overlay {
+      opacity: 1;
+    }
+    .video-play-overlay {
+      opacity: 0.7;
+      transition: opacity 0.2s ease;
+    }
+    
+    #slideshow-video::-webkit-media-controls {
+      display: none;
+    }
+    
+    #slideshow-video {
+      background: #000;
+    }
+
+    .video-progress-bar {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+      outline: none;
+      transition: height 0.2s;
+    }
+    .video-progress-bar::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #06b6d4;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+    }
+    .video-progress-bar::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #06b6d4;
+      cursor: pointer;
+      border: none;
+    }
+#gallery-grid.grid-cols-4 > * {
+min-height:75px;
+}
+#gallery-grid.grid-cols-3 > * {
+min-height: 90px;
+}
+.folder {
+    margin-top: 15px;
+    margin-left: 10px !important;
+}
+.pc-photo {
+    background: #1a2e36;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.45), 0 2px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05);
+    transition: transform 0.22s cubic-bezier(0.22,0.9,0.3,1), box-shadow 0.22s;
+}
+.pc-photo.pos-1 { left: 10px; top: 10px; transform: rotate(-7deg); }
+.pc-photo.pos-2 { left: 6px; top: -8px; transform: rotate(5deg); }
+.pc-photo.pos-3 { left: -4px; top: 4px; transform: rotate(-2deg); }
+
+.folder-btn:hover .pc-photo.pos-1,
+.folder-btn:focus-visible .pc-photo.pos-1 {
+    transform: rotate(-7deg) translateY(-3px) scale(1.04);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.55), 0 4px 8px rgba(0,0,0,0.4), 0 0 16px rgba(6,182,212,0.25);
+}
+.folder-btn:hover .pc-photo.pos-2,
+.folder-btn:focus-visible .pc-photo.pos-2 {
+    transform: rotate(5deg) translateY(-3px) scale(1.04);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.55), 0 4px 8px rgba(0,0,0,0.4), 0 0 16px rgba(6,182,212,0.25);
+}
+.folder-btn:hover .pc-photo.pos-3,
+.folder-btn:focus-visible .pc-photo.pos-3 {
+    transform: rotate(-2deg) translateY(-3px) scale(1.04);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.55), 0 4px 8px rgba(0,0,0,0.4), 0 0 16px rgba(6,182,212,0.25);
+}
+
+.folder-name { font-family: 'Caveat', 'Marker Felt', cursive; }
+.count-badge { box-shadow: 0 2px 5px rgba(0,0,0,0.35), 0 0 10px rgba(6,182,212,0.2); }
+.toc-link { transition: all 0.2s; }
+    .toc-link.active { background: rgba(6, 182, 212, 0.2); border-left: 3px solid #06b6d4; }
+    .toc-link:hover { background: rgba(6, 182, 212, 0.1); }
+body.mode-image .slideshow-video-wrapper {
+    display: none;
+}
+body.mode-image .slideshow-image-wrapper {
+    display: flex;
+}
+body.mode-video .slideshow-image-wrapper {
+    display: none;
+}
+body.mode-video .slideshow-video-wrapper {
+    display: flex;
+}
+</style>
+
+</head>
+
+<body class="h-full overflow-hidden flex flex-col bg-[#0d1a1f] text-[#e5e7eb] antialiased">
+
+  <header class="flex-shrink-0 h-9 bg-[#0d1a1f] text-white shadow-[0_2px_10px_rgba(1,74,96,0.5)] flex items-center justify-between px-2 z-20 border-b border-[#1a3a42]">
+    <div class="flex items-center gap-1.5">
+      <i id="appIcon" class="fa-solid fa-photo-video text-[16px] text-cyan-400"></i>
+      <span class="font-['Poppins',sans-serif] font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-white to-cyan-200 tracking-wide drop-shadow-[0_0_8px_rgba(6,182,212,0.5)] text-[15px]">Blob Image & Video DB</span>
+    </div>
+    <div class="flex items-center gap-1.5">
+      <button class="text-white/80 hover:text-white transition-colors px-1 py-0.5 hidden">
+        <i class="fa-solid fa-bell text-[10px]"></i>
+      </button>
+      <button id="switchApp" class="bg-cyan-800/50 hover:bg-cyan-700 text-white px-1.5 py-0.5 rounded border border-cyan-600/30 transition-colors text-[12px]" data-app="video">
+        <i id="switchAppIcon" class="fa-solid fa-video text-[10px]"></i>
+        <span id="switchAppLabel">Video</span>
+        </button>
+    </div>
+  </header>
+
+  <main id="app-main" class="flex-1 overflow-hidden flex flex-row relative">
+
+ <aside id="app-sidebar" class="w-9 md:w-56 bg-[#1a2e36] border-r border-cyan-400/20 overflow-x-hidden overflow-y-auto flex-shrink-0 px-1 md:px-4 py-2 z-10 flex flex-col gap-3">
+<button id="nav-gallery" class="nav-btn toc-link px-1 md:px-3 py-2 rounded text-cyan-300 hover:text-cyan-200 flex items-center justify-center md:justify-start active">
+<i class="fa-solid fa-house text-[14px] md:text-[10px] md:mr-2"></i>
+<span class="toc-text hidden md:inline">Gallery</span>
+</button>
+<button id="nav-upload" class="nav-btn toc-link px-1 md:px-3 py-2 rounded text-cyan-300 hover:text-cyan-200 flex items-center justify-center md:justify-start">
+<i class="fa-solid fa-cloud-upload-alt text-[14px] md:text-[10px] md:mr-2"></i> <span class="toc-text hidden md:inline">Upload</span>
+</button>
+<button id="nav-settings" class="nav-btn toc-link px-1 md:px-3 py-2 rounded text-cyan-300 hover:text-cyan-200 flex items-center justify-center md:justify-start">
+<i class="fa-solid fa-gear text-[14px] md:text-[10px] md:mr-2"></i> <span class="toc-text hidden md:inline">Settings</span>
+</button>
+  <div class="border-t border-gray-200 my-1"></div>
+  <a href="./help.html" class="flex items-center justify-center gap-1.5 p-1.5 rounded transition-colors border border-cyan-800/10 shadow-sm text-[#0d7088] hover:bg-[#057c94] hover:text-white hover:border-transparent" title="Help">
+    <i class="fa-solid fa-circle-question w-3.5 text-center text-[14px]"></i>
+    <span class="hidden text-[9px]">Help</span>
+  </a>
+  <a href="./docs.html" class="flex items-center justify-center gap-1.5 p-1.5 rounded transition-colors border border-cyan-800/10 shadow-sm text-[#0d7088] hover:bg-[#057c94] hover:text-white hover:border-transparent" title="Documentation">
+    <i class="fa-solid fa-book w-3.5 text-center text-[14px]"></i>
+    <span class="hidden text-[9px]">Docs</span>
+  </a>
+  
+<button id="exit-btn" class="flex items-center justify-center gap-1.5 p-1.5 rounded text-red-500/70 hover:bg-red-50 hover:text-red-600 transition-colors mt-auto">
+  <i class="fa-solid fa-right-from-bracket w-3.5 text-center text-[14px]"></i>
+  <span class="hidden text-[9px]">Exit</span>
+</button>
+</aside>
+
+    <section id="app-content" class="flex-1 overflow-hidden flex flex-col p-2 gap-1 relative bg-transparent min-h-0">
+
+<div id="content-header" class="flex-shrink-0 flex items-center justify-between border-b border-white/5 px-2 mb-0.5">
+  <div>
+    <h1 id="page-title" class="text-xs font-bold tracking-tight text-white drop-shadow-[0_1px_4px_rgba(1,74,96,0.8)]">Gallery</h1>
+    <p id="content-desc" class="hidden text-cyan-100/70 text-[8px] mt-0.5 drop-shadow">Browse your video collection</p>
+  </div>
+  <button id="refresh-btn" class="bg-white/10 backdrop-blur-md hover:bg-white/20 text-white px-2 py-1 rounded border border-white/20 transition-colors flex items-center gap-1 shadow-md"> <i class="fa-solid fa-rotate text-[8px]"></i> <span class="hidden sm:inline text-[9px]">Refresh</span> </button>
+  <button id="folder-up-btn" class="hidden bg-cyan-800/50 hover:bg-cyan-700 text-white px-1 py-0 rounded text-[8px] transition-colors disabled:opacity-30 disabled:cursor-not-allowed ml-1" title="Parent folder"> <i class="fa-solid fa-arrow-up"></i> </button>
+</div>
+
+<div class="bg-[#1a2e36] rounded-lg p-0.5 w-full mb-1 text-[9px] shadow-xl border border-cyan-400/30 overflow-hidden text-cyan-300 flex items-center gap-2 border-b border-white/10 flex-nowrap">
+<div id="dropdown-row" class="h-full min-h-[20px] flex-1 flex items-center gap-1 overflow-hidden"></div>
+</div>
+
+<div id="tab-container" class="flex-1 overflow-hidden min-h-0 relative">
+<div class="bg-[#1a2e36] rounded-lg p-2 w-full h-full shadow-xl border border-cyan-400/30 overflow-hidden flex flex-col">
+
+<div id="tab-pane-gallery" class="h-full min-h-0 overflow-hidden flex flex-col">
+
+<div id="id-summary-container" class="flex-shrink-0 mb-1 text-[9px] text-cyan-300 flex items-center gap-2 border-b border-white/10 pb-0.5 flex-wrap">
+<span><i class="fa-solid fa-video text-cyan-300 mr-1"></i> Total: <span id="summary-total-count" class="text-white font-semibold">0</span></span>
+<span class="text-white/20">|</span>
+<span><i class="fa-regular fa-clock text-cyan-300 mr-1"></i> Last upload: <span id="summary-last-upload" class="text-white font-semibold">—</span></span>
+</div>
+
+<div id="gallery-grid" class="flex-1 h-full min-h-0 overflow-y-auto pr-1 pb-1 grid grid-cols-3 gap-3 content-start overflow-x-hidden">
+<div class="col-span-full text-center text-white/50 text-[10px] mt-8"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Loading videos…</div>
+            </div>
+          </div>
+
+          <div id="tab-pane-upload" class="h-full hidden overflow-hidden">
+            <div class="flex flex-col gap-3 h-full max-h-full p-1">
+              <div class="flex-1 min-h-0 flex flex-col items-center justify-center p-2 text-center text-white/70 transition-colors gap-2">
+                <div id="drop-zone" class="w-full rounded-lg bg-white/5 backdrop-blur-sm border-2 border-dashed border-white/30 flex flex-col items-center justify-center p-4 text-center text-white/70 transition-colors cursor-pointer hover:border-cyan-400/50">
+                  <i class="fa-solid fa-cloud-upload-alt text-4xl text-cyan-300 mb-2"></i>
+                  <p class="text-[11px] font-medium">Drag & drop videos here</p>
+                  <p class="text-[8px] text-white/50">or click to select files</p>
+                  <input type="file" id="file-input" accept="video/*" multiple class="hidden" />
+                </div>
+                <div class="w-full flex justify-between">
+                  <button id="upload-btn" class="bg-[#057c94] hover:bg-[#046a80] text-white px-3 py-1 rounded text-[10px] border border-cyan-600/30 transition-colors shadow-sm self-center flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-upload"></i> Upload All
+                  </button>
+                  <button id="clear-btn" class="bg-white/10 hover:bg-white/20 text-white/80 px-3 py-1 rounded text-[10px] border border-white/10 transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-times"></i> Clear
+                  </button>
+                </div>
+                <div id="upload-progress" class="w-full max-w-xs mt-3 hidden">
+                  <div class="w-full bg-white/20 rounded-full h-1.5">
+                    <div id="progress-bar" class="bg-cyan-400 h-1.5 rounded-full transition-all duration-300" style="width:0%"></div>
+                  </div>
+                  <span id="progress-text" class="text-[8px] text-cyan-300">0%</span>
+                </div>
+                <div id="file-preview-grid" class="w-full grid grid-cols-3 gap-2 mt-3 flex-1 overflow-y-auto content-start"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="tab-pane-settings" class="h-full hidden overflow-hidden">
+            <div class="flex flex-col gap-2 p-1 h-full overflow-hidden">
+              <div class="flex-shrink-0 bg-[#0d1a1f] rounded p-1 border border-white/10 overflow-y-auto">
+                <div class="text-[8px] text-cyan-300 mb-0.5"><i class="fa-solid fa-sliders-h mr-1"></i> Blob Storage Settings</div>
+                <table class="w-full text-left border-collapse table-fixed">
+                  <thead>
+                    <tr class="text-cyan-400 text-[10px] uppercase tracking-wider font-semibold border-b border-cyan-800/40">
+                      <th class="py-1 px-1 rounded-tl w-[30%]">Setting</th>
+                      <th class="py-1 px-1 w-[50%]">Value</th>
+                      <th class="py-1 px-1 rounded-tr w-[20%] text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody class="text-[10px] text-gray-200">
+                    <tr class="even:bg-white/[0.06] hover:bg-white/10 transition-colors cursor-default border-b border-white/5">
+                      <td class="py-1 px-1 text-gray-300 truncate">Store ID</td>
+                      <td id="store-id-display" class="py-1 px-1 text-cyan-300 truncate font-mono">—</td>
+                      <td class="py-1 px-1 text-right text-green-400"><i class="fa-solid fa-check-circle text-green-400 mr-1"></i> Active</td>
+                    </tr>
+                    <tr class="even:bg-white/[0.06] hover:bg-white/10 transition-colors cursor-default border-b border-white/5">
+                      <td class="py-1 px-1 text-gray-300 truncate">API Endpoint</td>
+                      <td id="api-endpoint-display" class="py-1 px-1 text-cyan-300 truncate font-mono">—</td>
+                      <td class="py-1 px-1 text-right text-green-400"><i class="fa-solid fa-check-circle text-green-400 mr-1"></i> Reachable</td>
+                    </tr>
+                    <tr class="even:bg-white/[0.06] hover:bg-white/10 transition-colors cursor-default border-b border-white/5">
+                      <td class="py-1 px-1 text-gray-300 truncate">Secret Key</td>
+                      <td class="py-1 px-1 text-cyan-300 truncate">
+                        <input type="text" id="api-secretkey-input" class="bg-[#0d1a1f] border border-cyan-500/30 rounded px-1 py-0.5 text-[10px] text-cyan-200 w-full font-mono focus:outline-none focus:border-cyan-400" />
+                      </td>
+                      <td class="py-1 px-1 text-right">
+                        <button id="set-secretkey-btn" class="bg-cyan-800/50 hover:bg-cyan-700 text-white px-1 py-0.5 rounded text-[9px] border border-cyan-600/30 transition-colors">
+                          <i class="fa-solid fa-floppy-disk mr-1"></i> Set
+                        </button>
+                      </td>
+                    </tr>
+<tr class="even:bg-white/[0.06] hover:bg-white/10 transition-colors border-b border-white/5">
+<td class="py-1 px-1 text-gray-300 truncate">Upload Category</td>
+<td class="py-1 px-1 text-cyan-300 truncate">
+<input type="text" id="upload-category-input" class="bg-[#0d1a1f] border border-cyan-500/30 rounded px-1 py-0.5 text-[10px] text-cyan-200 w-full font-mono focus:outline-none focus:border-cyan-400" placeholder="e.g. videos" />
+</td>
+<td class="py-1 px-1 text-right">
+<button id="save-category-btn" class="bg-cyan-800/50 hover:bg-cyan-700 text-white px-1 py-0.5 rounded text-[9px] border border-cyan-600/30 transition-colors">
+<i class="fa-solid fa-floppy-disk mr-1"></i> Save
+</button>
+</td>
+</tr>
+<tr class="even:bg-white/[0.06] hover:bg-white/10 transition-colors border-b border-white/5">
+<td class="py-1 px-1 text-gray-300 truncate">Current DB</td>
+<td class="py-1 px-1 text-cyan-300 truncate">
+<input type="text" id="current-db-type" class="bg-[#0d1a1f] border border-cyan-500/30 rounded px-1 py-0.5 text-[10px] text-cyan-200 w-full font-mono focus:outline-none focus:border-cyan-400" placeholder="e.g. Videos" />
+</td>
+<td class="py-1 px-1 text-right text-green-400"><i id="current-db-icon" class="fa-solid fa-photo-video text-green-400 mr-1"></i><span>Active</span></td>
+</tr>
+</tbody>
+                </table>
+                <div class="mt-2 flex gap-2">
+                  <button id="test-connection-btn" class="bg-cyan-800/50 hover:bg-cyan-700 text-white px-2 py-0.5 rounded text-[9px] border border-cyan-600/30 transition-colors"><i class="fa-solid fa-link mr-1"></i> Test Connection</button>
+                  <span id="test-result" class="text-[9px] text-cyan-300 self-center"></span>
+                </div>
+              </div>
+</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-bar" class="flex-shrink-0 flex items-center justify-around border-t border-white/10 bg-white/5 backdrop-blur-sm rounded-t py-0.5 px-1 gap-1 mt-0.5 h-7">
+        <button id="tab-gallery" class="tab-btn flex-1 text-center py-0.5 text-white border-b-[1.5px] border-cyan-400 font-medium text-[9px] transition-colors" data-title="Browse your video collection">
+          <i class="fa-solid fa-video mr-1 text-[7px] text-cyan-300"></i><span>Gallery</span>
+        </button>
+        <button id="tab-upload" class="tab-btn flex-1 text-center py-0.5 text-white/60 border-b-[1.5px] border-transparent hover:text-white hover:border-cyan-400/50 text-[9px] transition-colors" data-title="Upload new videos">
+          <i class="fa-solid fa-cloud-upload-alt mr-1 text-[7px]"></i><span>Upload</span>
+        </button>
+        <button id="tab-settings" class="tab-btn flex-1 text-center py-0.5 text-white/60 border-b-[1.5px] border-transparent hover:text-white hover:border-cyan-400/50 text-[9px] transition-colors" data-title="Manage settings">
+          <i class="fa-solid fa-gear mr-1 text-[7px]"></i><span>Settings</span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <footer id="app-footer" class="flex-shrink-0 h-7 bg-[#0d1a1f] text-cyan-100/70 shadow-[0_-2px_10px_rgba(1,74,96,0.5)] flex items-center justify-between z-20 border-t border-[#1a3a42] px-2">
+    <div class="flex items-center gap-3">
+      <span class="flex items-center gap-1 mr-1 border-r border-cyan-800/30 pr-2">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="text-[8px] text-cyan-200/70 hidden sm:inline">Live</span>
+      </span>
+      <a href="help.html" class="hover:text-white transition-colors text-[8px]"><i class="fa-regular fa-circle-question mr-0.5 text-[8px]"></i> Help</a>
+      <a href="docs.html" class="hover:text-white transition-colors text-[8px]"><i class="fa-regular fa-lock mr-0.5 text-[8px] ml-[3px]"></i> Documentation</a>
+      <span class="text-white/20 text-[8px]">© 2026</span>
+    </div>
+    <div id="footer-clock" class="font-mono text-[8px] text-cyan-200/80 tracking-wide select-none flex items-center">
+      <span id="clock-day" class="font-sans opacity-70 mr-1">Wed,</span>
+      <span id="clock-hours">02</span>
+      <span id="clock-colon" class="clock-colon">:</span>
+      <span id="clock-minutes">35</span>
+      <span id="clock-ampm" class="ml-0.5">PM</span>
+    </div>
+  </footer>
+
+  <div id="custom-modal-overlay" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center opacity-0 transition-opacity duration-250">
+    <div class="modal-box bg-[#0d1a1f]/85 backdrop-blur-xl border border-cyan-400/30 rounded-2xl p-6 max-w-[400px] w-[90%] shadow-2xl scale-95 translate-y-2 transition-all duration-250 text-center">
+      <div class="text-4xl text-cyan-400 mb-2"><i class="fa-solid fa-circle-info"></i></div>
+      <div id="modal-message" class="text-gray-200 text-[11px] font-medium mb-3">Message</div>
+      <div id="modal-buttons" class="flex gap-3 justify-center flex-wrap"></div>
+    </div>
+  </div>
+
+<div id="slideshow-overlay" class="hidden fixed inset-0 bg-black/90 backdrop-blur-xl z-[10000] items-center justify-center opacity-0 transition-opacity duration-300">
+    <button class="close-btn fixed top-2 right-3 text-white/70 hover:text-white text-3xl transition-all hover:rotate-90 z-[10001] bg-transparent border-0 p-2 cursor-pointer">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+    <button id="slideshow-prev" class="fixed top-1/2 -translate-y-1/2 left-2 text-white/50 hover:text-white text-2xl z-[10001] bg-black/30 hover:bg-black/50 p-2 rounded-lg backdrop-blur-sm transition-all border-0 cursor-pointer">
+      <i class="fa-solid fa-chevron-left"></i>
+    </button>
+    <button id="slideshow-next" class="fixed top-1/2 -translate-y-1/2 right-2 text-white/50 hover:text-white text-2xl z-[10001] bg-black/30 hover:bg-black/50 p-2 rounded-lg backdrop-blur-sm transition-all border-0 cursor-pointer">
+      <i class="fa-solid fa-chevron-right"></i>
+    </button>
+
+    <div class="slideshow-image-wrapper w-[90%] max-w-[90vw] max-h-[85vh] flex items-center justify-center relative z-[10000]">
+      <div class="slideshow-loader absolute text-white/30 text-3xl"><i class="fa-solid fa-spinner"></i></div>
+      <img id="slideshow-image" src="" alt="Slideshow" class="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl opacity-0 transition-opacity duration-400" />
+    </div>
+
+    <div class="slideshow-video-wrapper w-[90%] max-w-[90vw] max-h-[85vh] flex items-center justify-center relative z-[10000]">
+      <div class="slideshow-loader absolute text-white/30 text-3xl"><i class="fa-solid fa-spinner"></i></div>
+      <video id="slideshow-video" 
+             src="" 
+             class="max-w-full max-h-[85vh] rounded-lg shadow-2xl opacity-0 transition-opacity duration-400"
+             playsinline
+             preload="metadata">
+      </video>
+      <button id="slideshow-overlay-play" 
+              class="absolute inset-0 flex items-center justify-center z-[10002] cursor-pointer"
+              style="background: transparent; border: none;">
+        <div class="w-20 h-20 rounded-full bg-black/60 hover:bg-black/40 backdrop-blur-sm flex items-center justify-center transition-transform duration-300 hover:scale-110 border border-white/20 shadow-2xl">
+          <i class="fa-solid fa-play text-white text-3xl ml-1"></i>
+        </div>
+      </button>
+      <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300">
+        <div class="flex items-center gap-3 max-w-4xl mx-auto">
+          <button id="slideshow-play-pause" class="text-white/80 hover:text-white text-lg transition-colors">
+            <i class="fa-solid fa-play"></i>
+          </button>
+          
+          <div class="flex-1 flex items-center gap-2">
+            <span id="video-current-time" class="text-white/70 text-xs font-mono">0:00</span>
+            <input type="range" id="video-progress-bar" class="video-progress-bar flex-1" min="0" max="100" value="0" />
+            <span id="video-duration" class="text-white/70 text-xs font-mono">0:00</span>
+          </div>
+          
+          <button id="video-volume-btn" class="text-white/80 hover:text-white text-sm transition-colors">
+            <i class="fa-solid fa-volume-high"></i>
+          </button>
+          
+          <button id="video-fullscreen-btn" class="text-white/80 hover:text-white text-sm transition-colors">
+            <i class="fa-solid fa-expand"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="slideshow-counter" class="fixed bottom-6 left-1/2 -translate-x-1/2 text-white/60 text-sm z-[10001] bg-black/40 px-4 py-1 rounded-full backdrop-blur-sm font-mono">1 / 1</div>
+    <div class="swipe-hint fixed bottom-16 left-1/2 -translate-x-1/2 text-white/10 text-xs z-[10000] pointer-events-none"><i class="fa-solid fa-arrows-left-right mr-1"></i> swipe</div>
+</div>
+
+  <div id="unlock-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-md z-[99999] flex items-center justify-center transition-opacity duration-300">
+    <div class="modal-box bg-[#0d1a1f]/95 border border-cyan-400/30 rounded-2xl p-6 max-w-[380px] w-[90%] shadow-2xl text-center transform transition-all duration-300 scale-95 translate-y-2 opacity-0">
+      <div class="text-5xl text-cyan-400 mb-3"><i class="fa-solid fa-lock"></i></div>
+      <h2 class="text-white text-base font-semibold mb-1 tracking-wide">🔐 Unlock VideoDB</h2>
+      <p class="text-cyan-100/60 text-[10px] mb-4 max-w-[280px] mx-auto">Enter the password to decrypt your stored API key and access your video database.</p>
+      <input type="password" id="unlock-password" class="w-full bg-[#0d1a1f] border border-cyan-500/40 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-cyan-400 transition-colors mb-3 placeholder:text-white/30" placeholder="Enter password..." autofocus />
+      <div id="unlock-error" class="text-red-400 text-[10px] mb-3 hidden flex items-center justify-center gap-1.5">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <span id="unlock-error-msg">Invalid password. Please try again.</span>
+      </div>
+      <button id="unlock-btn" class="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-md transition-colors w-full flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+        <i class="fa-solid fa-key"></i>
+        <span>Unlock</span>
+      </button>
+      <p class="text-white/20 text-[7px] mt-4 tracking-wider">🔑 encrypted · secure</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+
+<script>
+  window.switchBlobApp = function(type) {
+    localStorage.setItem('blob-app-type', type);
+    window.location.reload();
+  };
+  
+  function updateSwitchButton() {
+    var appType = localStorage.getItem('blob-app-type') || 'image';
+    var btn = document.getElementById('switchApp');
+    var icon = document.getElementById('switchAppIcon');
+    var label = document.getElementById('switchAppLabel');
+    var title = document.getElementById('page-title');
+    var currDb = document.getElementById('current-db-type');
+    var currIcon = document.getElementById('current-db-icon');
+    
+    if (appType === 'video') {
+      btn.setAttribute('data-app', 'image');
+      icon.className = 'fa-solid fa-image text-[10px]';
+      label.textContent = 'Images';
+      title.textContent = 'Videos Blob DB';
+      currDb.value = 'Videos';
+      currIcon.className = "fa-solid fa-video text-green-400 mr-1";
+    } else {
+      btn.setAttribute('data-app', 'video');
+      icon.className = 'fa-solid fa-video text-[10px]';
+      label.textContent = 'Video';
+      title.textContent = 'Images Blob DB';
+      currDb.value = 'Images';
+      currIcon.className = "fa-solid fa-image text-green-400 mr-1";
+    }
+  }
+  
+  document.addEventListener('DOMContentLoaded', function() {
+    var appType = localStorage.getItem('blob-app-type') || 'image';
+    
+    document.body.classList.remove('mode-image', 'mode-video');
+    document.body.classList.add(appType === 'video' ? 'mode-video' : 'mode-image');
+    
+    var fileInput = document.getElementById('file-input');
+    if (fileInput) {
+      fileInput.setAttribute('accept', appType === 'video' ? 'video/*' : 'image/*');
+    }
+    
+    updateSwitchButton();
+    
+    if (appType === 'video') {
+      VideoBlob.VideoDBApp.init();
+    } else {
+      ImageBlob.ImageDBApp.init();
+    }
+    
+    var switchBtn = document.getElementById('switchApp');
+    if (switchBtn) {
+      switchBtn.addEventListener('click', function() {
+        var target = this.getAttribute('data-app');
+        if (target) {
+          switchBlobApp(target);
+        }
+      });
+    }
+    
+    var exitBtn = document.getElementById('exit-btn');
+    if (exitBtn) {
+      exitBtn.addEventListener('click', function() {
+        var exitEvent = new CustomEvent('blobdb-exit', {
+          detail: { timestamp: Date.now() }
+        });
+        document.dispatchEvent(exitEvent);
+      });
+    }
+    
+    document.addEventListener('blobdb-exit', function(e) {
+      console.log('Exit event received', e.detail);
+      if (window.ImageDBApp && ImageDBApp.showConfirm) {
+        ImageDBApp.showConfirm('Are you sure you want to exit?', function() {
+        });
+      } else if (window.VideoDBApp && VideoDBApp.showConfirm) {
+        VideoDBApp.showConfirm('Are you sure you want to exit?', function() {
+        });
+      }
+    });
+  });
+</script>
+</body>
+</html>
