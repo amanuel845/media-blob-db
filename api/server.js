@@ -42,12 +42,10 @@ async function readJsonBody(req) {
 //   4. blob.uploadedAt        → final fallback
 // ------------------------------------------------------------
 function resolveLastModified(blob) {
-  // 1. Metadata
   if (blob.metadata?.lastModified) {
     return Number(blob.metadata.lastModified);
   }
 
-  // 2. Filename suffix (14-digit YYYYMMDDHHMMSS)
   const filename = (blob.pathname || '').split('/').pop() || '';
   const baseName = filename.split('.')[0];
   const tokens   = baseName.split('_');
@@ -71,7 +69,6 @@ function resolveLastModified(blob) {
     }
   }
 
-  // 3. Legacy folder structure .../YYYY/MM/DD/filename.ext
   const parts = (blob.pathname || '').split('/').filter(p => p.length > 0);
   if (parts.length >= 4) {
     const year  = parseInt(parts[parts.length - 4], 10);
@@ -84,7 +81,6 @@ function resolveLastModified(blob) {
     }
   }
 
-  // 4. Fallback
   return blob.uploadedAt;
 }
 
@@ -187,6 +183,10 @@ export default async function handler(req, res) {
         const ext = file.mimetype ? file.mimetype.split('/')[1] : 'png';
         filename = `${crypto.randomUUID()}.${ext}`;
       }
+
+      // ★ NEW: append the same _YYYYMMDDHHMMSS suffix the presign path uses
+      filename = appendDateSuffix(filename, lastModified);
+
       const pathname = folder + filename;
 
       const buffer = fs.readFileSync(file.filepath);
