@@ -195,6 +195,7 @@ export default async function handler(req, res) {
         contentType: file.mimetype || 'application/octet-stream',
         token: BLOB_READ_WRITE_TOKEN,
         addRandomSuffix: false,
+        cacheControlMaxAge: 60,
         metadata: {
           lastModified: String(lastModified),
         },
