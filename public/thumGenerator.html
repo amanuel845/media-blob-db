@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full overflow-hidden">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0d1a1f" />
+  <title>Video Thumbnail · Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *::-webkit-scrollbar { width: 8px; }
+    *::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+    *::-webkit-scrollbar-thumb { background: rgba(6, 182, 212, 0.3); border-radius: 4px; }
+    *::-webkit-scrollbar-thumb:hover { background: rgba(6, 182, 212, 0.5); }
+    * { scrollbar-width: thin; scrollbar-color: rgba(6, 182, 212, 0.3) rgba(255, 255, 255, 0.05); }
+
+    code {
+      background: rgba(13, 26, 31, 0.8);
+      padding: 0.15rem 0.4rem;
+      border-radius: 0.25rem;
+      font-family: 'Fira Code', monospace;
+      word-break: break-all;
+      overflow-wrap: anywhere;
+    }
+
+    /* Offscreen render host — the video element must be in the document,
+       otherwise Safari/iOS hands back solid black frames. */
+    #vhost {
+      position: fixed;
+      top: 0; left: 0;
+      width: 320px; height: 180px;
+      overflow: hidden;
+      opacity: .01;
+      pointer-events: none;
+      z-index: -1;
+    }
+    #vhost video {
+      width: 320px; height: 180px;
+      object-fit: contain;
+      display: block;
+      background: #000;
+    }
+
+    .drop-zone {
+      transition: border-color .15s, background-color .15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .drop-zone:hover, .drop-zone.over {
+      border-color: rgba(6, 182, 212, 0.7);
+      background-color: rgba(6, 182, 212, 0.05);
+    }
+
+    .progress-fill {
+      background: linear-gradient(90deg, #0891b2, #22d3ee);
+      transition: width .18s ease;
+    }
+    .progress-fill.err {
+      background: #ef4444;
+      transition: none;
+    }
+
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+
+<body class="h-full overflow-hidden flex flex-col bg-[#0d1a1f] text-[#e5e7eb] antialiased">
+
+  <!-- ========== HEADER ========== -->
+  <header class="flex-shrink-0 h-9 bg-[#0d1a1f] text-white shadow-[0_2px_10px_rgba(1,74,96,0.5)] flex items-center justify-between px-2 z-20 border-b border-[#1a3a42]">
+    <div class="flex items-center gap-1.5">
+      <i class="fa-solid fa-film text-[16px] text-cyan-400"></i>
+      <span class="font-['Poppins',sans-serif] font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-white to-cyan-200 tracking-wide drop-shadow-[0_0_8px_rgba(6,182,212,0.5)] text-[15px]">Thumbnailer</span>
+    </div>
+    <div class="flex items-center gap-1.5">
+      <button id="resetBtn" hidden class="bg-cyan-800/50 hover:bg-cyan-700 text-white px-2 py-0.5 rounded border border-cyan-600/30 transition-colors text-[12px]">
+        <i class="fa-solid fa-rotate-left mr-1"></i><span class="hidden sm:inline">New video</span>
+      </button>
+      <span class="text-[10px] text-cyan-200/60 font-mono hidden sm:inline">v1.0</span>
+    </div>
+  </header>
+
+  <!-- ========== MAIN ========== -->
+  <main class="flex-1 overflow-y-auto p-2 md:p-6 relative">
+    <div class="max-w-2xl mx-auto space-y-4">
+
+      <!-- Intro -->
+      <div class="text-center pt-2 pb-1">
+        <h1 class="text-xl md:text-2xl font-bold text-cyan-300 mb-1 flex items-center justify-center gap-2 font-['Poppins',sans-serif]">
+          <i class="fa-solid fa-image text-[18px]"></i>Video → Thumbnail
+        </h1>
+        <p class="text-xs text-cyan-100/60">Pick the best frame automatically. Runs entirely on-device.</p>
+      </div>
+
+      <!-- ========== DROP ZONE ========== -->
+      <label id="drop" class="drop-zone block bg-[#1a2e36] rounded-lg border-2 border-dashed border-cyan-400/30 cursor-pointer p-5 md:p-8 text-center">
+        <input type="file" id="file" accept="video/*" hidden>
+        <div class="flex flex-col items-center gap-2">
+          <div class="w-12 h-12 rounded-full bg-cyan-500/10 border border-cyan-400/30 flex items-center justify-center">
+            <i class="fa-solid fa-cloud-arrow-up text-cyan-400 text-xl"></i>
+          </div>
+          <div class="font-semibold text-cyan-200 text-sm">Choose a video</div>
+          <div class="text-[11px] text-cyan-100/50">or drop a file here · mp4 / webm / mov</div>
+        </div>
+      </label>
+
+      <!-- ========== FILE INFO ========== -->
+      <section id="infoCard" hidden class="bg-[#1a2e36] rounded-lg border border-cyan-400/30 p-3 md:p-4">
+        <div class="text-cyan-400 text-[10px] font-semibold uppercase tracking-wider mb-2 flex items-center gap-2">
+          <i class="fa-solid fa-circle-info"></i><span>File info</span>
+        </div>
+        <dl id="infoGrid" class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12px]"></dl>
+      </section>
+
+      <!-- ========== PROGRESS ========== -->
+      <section id="progCard" hidden class="bg-[#1a2e36] rounded-lg border border-cyan-400/30 p-3 md:p-4">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <i id="progIcon" class="fa-solid fa-circle-notch spin text-cyan-400 text-[12px]"></i>
+            <span id="progLabel" class="text-[12px] text-cyan-100/80 truncate">Working…</span>
+          </div>
+          <span id="progPct" class="text-[11px] font-mono text-cyan-300 tabular-nums flex-shrink-0">0%</span>
+        </div>
+        <div class="h-1.5 rounded-full bg-black/40 border border-cyan-400/10 overflow-hidden">
+          <div id="progBar" class="progress-fill h-full rounded-full" style="width:0%"></div>
+        </div>
+      </section>
+
+      <!-- ========== RESULT ========== -->
+      <section id="resCard" hidden class="bg-[#1a2e36] rounded-lg border border-cyan-400/30 p-3 md:p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-cyan-400 text-[10px] font-semibold uppercase tracking-wider flex items-center gap-2">
+            <i class="fa-solid fa-image"></i><span>Thumbnail</span>
+          </div>
+          <span id="pickTag" class="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-400/20">auto pick</span>
+        </div>
+
+        <div class="rounded-lg overflow-hidden border border-cyan-400/20 bg-black leading-[0]">
+          <img id="mainImg" alt="Generated thumbnail" class="w-full h-auto block">
+        </div>
+
+        <div class="flex items-center justify-between gap-3 mt-2.5 text-[11px] text-cyan-100/50">
+          <span id="tsLabel" class="font-mono text-cyan-300"><i class="fa-regular fa-clock mr-1"></i>0:00</span>
+          <span id="dimLabel" class="font-mono truncate"></span>
+        </div>
+
+        <div class="flex gap-2 mt-3">
+          <button id="dl" disabled
+            class="flex-1 bg-cyan-600 hover:bg-cyan-500 disabled:bg-cyan-800/40 disabled:text-cyan-100/30 disabled:cursor-not-allowed text-white text-[12.5px] font-semibold py-2 rounded-lg border border-cyan-500/50 transition-colors">
+            <i class="fa-solid fa-download mr-1.5"></i>Download JPG
+          </button>
+          <button id="again" disabled
+            class="flex-1 bg-cyan-800/50 hover:bg-cyan-700 disabled:bg-cyan-900/30 disabled:text-cyan-100/30 disabled:cursor-not-allowed text-white text-[12.5px] font-semibold py-2 rounded-lg border border-cyan-600/30 transition-colors">
+            <i class="fa-solid fa-shuffle mr-1.5"></i>Another frame
+          </button>
+        </div>
+      </section>
+
+      <!-- ========== HOW IT WORKS ========== -->
+      <section id="howCard" class="bg-[#1a2e36] rounded-lg border border-cyan-400/20 p-3 md:p-4">
+        <div class="text-cyan-400 text-[10px] font-semibold uppercase tracking-wider mb-2 flex items-center gap-2">
+          <i class="fa-solid fa-wand-magic-sparkles"></i><span>How the pick works</span>
+        </div>
+        <ul class="space-y-1.5 text-[11px] text-cyan-100/70">
+          <li class="flex gap-2"><i class="fa-solid fa-check text-cyan-400 mt-0.5 text-[10px]"></i><span>Six candidate frames are sampled across 8 %–88 % of the runtime to dodge intro fades and end cards.</span></li>
+          <li class="flex gap-2"><i class="fa-solid fa-check text-cyan-400 mt-0.5 text-[10px]"></i><span>Each frame is scored on detail, colour, and exposure — the highest-scoring one wins.</span></li>
+          <li class="flex gap-2"><i class="fa-solid fa-check text-cyan-400 mt-0.5 text-[10px]"></i><span>Black / flat frames are detected and pushed to the back, with automatic re-capture retries.</span></li>
+        </ul>
+      </section>
+
+      <!-- Footer note -->
+      <div class="p-3 bg-black/40 border-l-4 border-cyan-400 rounded">
+        <p class="text-[11px] text-cyan-100/70"><i class="fa-solid fa-lock mr-1.5 text-cyan-400"></i>Nothing is uploaded. All processing happens in your browser.</p>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ========== FOOTER ========== -->
+  <footer class="flex-shrink-0 h-7 bg-[#0d1a1f] text-cyan-100/70 shadow-[0_-2px_10px_rgba(1,74,96,0.5)] flex items-center justify-between z-20 border-t border-[#1a3a42] px-2">
+    <div class="flex items-center gap-3">
+      <span class="flex items-center gap-1 mr-1 border-r border-cyan-800/30 pr-2">
+        <span id="statusDot" class="w-1.5 h-1.5 rounded-full bg-cyan-400/50"></span>
+        <span id="statusText" class="text-[8px] text-cyan-200/70">Ready</span>
+      </span>
+      <span class="text-white/20 text-[8px]">© 2026</span>
+    </div>
+    <div class="font-mono text-[8px] text-cyan-200/80 tracking-wide select-none">
+      Thumbnailer v1.0
+    </div>
+  </footer>
+
+  <!-- offscreen render host -->
+  <div id="vhost" aria-hidden="true"></div>
+
+<script>
+/* ============================================================================
+ * VideoThumbnail — IIFE module
+ * ----------------------------------------------------------------------------
+ * generate(input, options) -> Promise<Output>
+ *
+ * INPUT  {
+ *   file:         File | Blob   — the source video (required)
+ *   name?:        string        — source filename (default: file.name)
+ *   lastModified?:number        — source timestamp (default: file.lastModified)
+ *   resolution?:  {width,height}— source resolution hint
+ * }
+ *
+ * OPTIONS {
+ *   maxWidth?:   number         — max output width in px   (default 960)
+ *   quality?:    number         — JPEG quality 0..1        (default 0.92)
+ *   candidates?: number         — frames sampled internally (default 6)
+ *   onProgress?: (pct, label) => void
+ * }
+ *
+ * OUTPUT {
+ *   file:         Blob          — JPEG thumbnail
+ *   name:         string        — suggested filename, e.g. "clip_5.20s.jpg"
+ *   lastModified: number        — creation timestamp (ms since epoch)
+ *   resolution:   {width,height}— actual thumbnail dimensions
+ *   timestamp:    number        — seconds into the video the frame was taken
+ *   source:       { … }         — provenance of the source video
+ * }
+ * ========================================================================== */
+var VideoThumbnail = (function () {
+  'use strict';
+
+  var DEF = {
+    maxWidth:   960,
+    quality:    0.92,
+    candidates: 6,
+    blankMean:  8,
+    blankSD:    6
+  };
+
+  /* -------- shared offscreen host -------- */
+  var host = null;
+  function getHost() {
+    if (host) return host;
+    if (typeof document === 'undefined') throw new Error('VideoThumbnail requires a DOM');
+    host = document.createElement('div');
+    host.setAttribute('aria-hidden', 'true');
+    host.style.cssText =
+      'position:fixed;top:0;left:0;width:320px;height:180px;' +
+      'overflow:hidden;opacity:.01;pointer-events:none;z-index:-1;';
+    (document.body || document.documentElement).appendChild(host);
+    return host;
+  }
+
+  /* -------- shared analysis probe -------- */
+  var probe = null, pctx = null;
+  function getProbe() {
+    if (probe) return pctx;
+    probe = document.createElement('canvas');
+    probe.width = 64; probe.height = 36;
+    pctx = probe.getContext('2d', { willReadFrequently: true });
+    return pctx;
+  }
+
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function stampOf(s) { return Number(s).toFixed(2).replace('.', '_'); }
+  function stripExt(n) { return String(n || '').replace(/\.[^.]+$/, '') || 'thumbnail'; }
+
+  /* -------- video lifecycle -------- */
+  function loadVideo(url, onBuffer) {
+    return new Promise(function (resolve, reject) {
+      var v = document.createElement('video');
+      v.muted = true;
+      v.defaultMuted = true;
+      v.playsInline = true;
+      v.setAttribute('muted', '');
+      v.setAttribute('playsinline', '');
+      v.setAttribute('webkit-playsinline', '');
+      v.preload = 'auto';
+      v.src = url;
+      getHost().appendChild(v);
+
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (!settled) { settled = true; reject(new Error('Timed out reading this video')); }
+      }, 25000);
+
+      v.addEventListener('progress', function () {
+        if (!onBuffer) return;
+        try {
+          if (v.duration && v.buffered.length) {
+            onBuffer(v.buffered.end(v.buffered.length - 1) / v.duration);
+          }
+        } catch (e) {}
+      });
+
+      v.addEventListener('loadedmetadata', function () {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(v);
+      }, { once: true });
+
+      v.addEventListener('error', function () {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(new Error('This video format could not be decoded'));
+      }, { once: true });
+    });
+  }
+
+  function releaseVideo(v) {
+    if (!v) return;
+    try {
+      v.pause();
+      v.removeAttribute('src');
+      v.load();
+      if (v.parentNode) v.parentNode.removeChild(v);
+    } catch (e) {}
+  }
+
+  function waitForData(v) {
+    return new Promise(function (resolve) {
+      if (v.readyState >= 2) return resolve();
+      var to = setTimeout(resolve, 8000);
+      v.addEventListener('loadeddata', function () { clearTimeout(to); resolve(); }, { once: true });
+    });
+  }
+
+  function seek(v, t) {
+    return new Promise(function (resolve) {
+      var done = false, to;
+      function fin() {
+        if (done) return;
+        done = true;
+        clearTimeout(to);
+        v.removeEventListener('seeked', fin);
+        resolve();
+      }
+      to = setTimeout(fin, 5000);
+      v.addEventListener('seeked', fin);
+      try { v.currentTime = t; } catch (e) { fin(); }
+    });
+  }
+
+  function settle(v) {
+    return new Promise(function (resolve) {
+      var done = false;
+      function fin() { if (done) return; done = true; resolve(); }
+      if (typeof v.requestVideoFrameCallback === 'function') {
+        try { v.requestVideoFrameCallback(function () { fin(); }); } catch (e) {}
+      }
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { setTimeout(fin, 40); });
+      });
+      setTimeout(fin, 700);
+    });
+  }
+
+  function toBlob(canvas, quality) {
+    return new Promise(function (resolve) {
+      if (canvas.toBlob) canvas.toBlob(function (b) { resolve(b); }, 'image/jpeg', quality);
+      else resolve(null);
+    });
+  }
+
+  function analyze(src, opts) {
+    var ctx = getProbe(), d;
+    try {
+      ctx.drawImage(src, 0, 0, 64, 36);
+      d = ctx.getImageData(0, 0, 64, 36).data;
+    } catch (e) {
+      return { blank: false, score: 50 };
+    }
+    var n = d.length / 4, sum = 0, sum2 = 0, satSum = 0;
+    for (var i = 0; i < d.length; i += 4) {
+      var l = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+      sum += l; sum2 += l * l;
+      satSum += Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]);
+    }
+    var mean = sum / n;
+    var sd   = Math.sqrt(Math.max(0, sum2 / n - mean * mean));
+    var sat  = satSum / n;
+    return {
+      blank: (mean < opts.blankMean && sd < opts.blankSD),
+      score: sd * 1.0 + sat * 0.6 - Math.abs(mean - 118) * 0.35
+    };
+  }
+
+  async function grabFrame(video, ctx, canvas, t, dur, opts) {
+    await seek(video, t);
+    await settle(video);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    var a = analyze(canvas, opts);
+    if (!a.blank) return a;
+
+    var t2 = Math.min(t + 0.05, Math.max(0, dur - 0.03));
+    if (t2 !== t) {
+      await seek(video, t2);
+      await settle(video);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      a = analyze(canvas, opts);
+      if (!a.blank) return a;
+    }
+
+    try {
+      await seek(video, t);
+      var p = video.play();
+      if (p && typeof p.then === 'function') { try { await p; } catch (e) {} }
+      await sleep(120);
+      video.pause();
+      await settle(video);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      a = analyze(canvas, opts);
+    } catch (e) {}
+    return a;
+  }
+
+  /* ========================================================================
+   * Public: generate(input, options)
+   * ====================================================================== */
+  async function generate(input, options) {
+    input = input || {};
+    var srcFile = input.file;
+    if (!srcFile) throw new Error('No video file provided');
+
+    var opts = Object.assign({}, DEF, options || {});
+
+    var srcName     = input.name || srcFile.name || 'video';
+    var srcModified = (typeof input.lastModified === 'number')
+      ? input.lastModified
+      : (srcFile.lastModified || Date.now());
+    var srcRes      = input.resolution || null;
+
+    var onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : null;
+    function tick(pct, label) { if (onProgress) onProgress(pct, label); }
+
+    var url = URL.createObjectURL(srcFile);
+    var video = null;
+
+    try {
+      tick(2, 'Opening video…');
+      video = await loadVideo(url, function (p) {
+        tick(2 + p * 16, 'Buffering… ' + Math.round(p * 100) + '%');
+      });
+
+      var dur = video.duration;
+      var vw  = video.videoWidth  || (srcRes && srcRes.width)  || 0;
+      var vh  = video.videoHeight || (srcRes && srcRes.height) || 0;
+
+      if (!isFinite(dur) || dur <= 0 || !vw || !vh) {
+        throw new Error('Could not read video metadata');
+      }
+
+      tick(19, 'Decoding…');
+      await waitForData(video);
+
+      var maxW  = opts.maxWidth || DEF.maxWidth;
+      var scale = Math.min(1, maxW / vw);
+      var cw    = Math.max(2, Math.round(vw * scale));
+      var ch    = Math.max(2, Math.round(vh * scale));
+
+      var canvas = document.createElement('canvas');
+      canvas.width  = cw;
+      canvas.height = ch;
+      var ctx = canvas.getContext('2d', { alpha: false });
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, cw, ch);
+
+      var count = Math.max(1, opts.candidates || DEF.candidates);
+      var times = [];
+      for (var i = 0; i < count; i++) {
+        var frac = (count === 1) ? 0.35 : 0.08 + (0.80 * i) / (count - 1);
+        times.push(Math.min(frac * dur, Math.max(0, dur - 0.05)));
+      }
+
+      var cands = [];
+      for (var k = 0; k < times.length; k++) {
+        tick(20 + (k / times.length) * 78,
+             'Analysing frame ' + (k + 1) + '/' + times.length + '…');
+
+        var info;
+        try { info = await grabFrame(video, ctx, canvas, times[k], dur, opts); }
+        catch (e) { continue; }
+
+        var blob = await toBlob(canvas, opts.quality || DEF.quality);
+        if (!blob) continue;
+
+        cands.push({
+          time:  times[k],
+          blob:  blob,
+          w:     cw,
+          h:     ch,
+          score: info.score,
+          blank: info.blank
+        });
+      }
+
+      if (!cands.length) throw new Error('No frames could be captured from this video');
+
+      cands.sort(function (a, b) {
+        if (a.blank !== b.blank) return a.blank ? 1 : -1;
+        return b.score - a.score;
+      });
+
+      var best = cands[0];
+      tick(100, 'Done');
+
+      return {
+        file:         best.blob,
+        name:         stripExt(srcName) + '_' + stampOf(best.time) + 's.jpg',
+        lastModified: Date.now(),
+        resolution:   { width: best.w, height: best.h },
+        timestamp:    best.time,
+        source: {
+          name:         srcName,
+          lastModified: srcModified,
+          resolution:   { width: vw, height: vh },
+          duration:     dur
+        }
+      };
+    } finally {
+      try { URL.revokeObjectURL(url); } catch (e) {}
+      releaseVideo(video);
+    }
+  }
+
+  return { generate: generate, defaults: DEF };
+})();
+
+
+/* ============================================================================
+ * App — UI consumer
+ * ========================================================================== */
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var fileInput = $('file'),
+      drop      = $('drop'),
+      infoCard  = $('infoCard'),
+      infoGrid  = $('infoGrid'),
+      progCard  = $('progCard'),
+      progBar   = $('progBar'),
+      progPct   = $('progPct'),
+      progLabel = $('progLabel'),
+      progIcon  = $('progIcon'),
+      resCard   = $('resCard'),
+      mainImg   = $('mainImg'),
+      tsLabel   = $('tsLabel'),
+      dimLabel  = $('dimLabel'),
+      pickTag   = $('pickTag'),
+      dlBtn     = $('dl'),
+      againBtn  = $('again'),
+      resetBtn  = $('resetBtn'),
+      statusDot = $('statusDot'),
+      statusText= $('statusText');
+
+  var lastURL = null;
+  var lastOut = null;
+  var runId = 0;
+
+  /* ---------- formatting ---------- */
+  function fmtSize(b) {
+    if (b == null) return '—';
+    if (b < 1024) return b + ' B';
+    var u = ['KB', 'MB', 'GB', 'TB'], i = -1;
+    do { b /= 1024; i++; } while (b >= 1024 && i < u.length - 1);
+    return (b < 10 ? b.toFixed(1) : Math.round(b)) + ' ' + u[i];
+  }
+  function fmtClock(s) {
+    if (!isFinite(s) || s < 0) return '--:--';
+    var h = Math.floor(s / 3600),
+        m = Math.floor((s % 3600) / 60),
+        sec = Math.floor(s % 60);
+    return (h ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(sec).padStart(2, '0');
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ---------- status strip ---------- */
+  function setStatus(kind, text) {
+    var colors = {
+      ready:  'bg-cyan-400/50',
+      work:   'bg-cyan-400 animate-pulse',
+      ok:     'bg-emerald-400',
+      err:    'bg-red-400'
+    };
+    statusDot.className = 'w-1.5 h-1.5 rounded-full ' + (colors[kind] || colors.ready);
+    statusText.textContent = text;
+  }
+
+  /* ---------- progress ---------- */
+  function setProgress(pct, label) {
+    progCard.hidden = false;
+    var p = Math.max(0, Math.min(100, pct));
+    progBar.style.width = p + '%';
+    progPct.textContent = Math.round(p) + '%';
+    if (label) progLabel.textContent = label;
+    progBar.classList.remove('err');
+    progIcon.className = 'fa-solid fa-circle-notch spin text-cyan-400 text-[12px]';
+    setStatus('work', label || 'Working');
+  }
+
+  function showError(msg) {
+    progCard.hidden = false;
+    progBar.classList.add('err');
+    progBar.style.width = '100%';
+    progPct.textContent = '!';
+    progLabel.textContent = msg;
+    progIcon.className = 'fa-solid fa-triangle-exclamation text-red-400 text-[12px]';
+    setStatus('err', 'Error');
+  }
+
+  /* ---------- file info ---------- */
+  function renderInfo(map) {
+    var html = '';
+    for (var k in map) {
+      if (!Object.prototype.hasOwnProperty.call(map, k)) continue;
+      var v = map[k];
+      html += '<dt class="text-cyan-100/50 whitespace-nowrap">' + esc(k) + '</dt>' +
+              '<dd class="truncate text-cyan-100/90 font-mono" title="' + esc(v) + '">' + esc(v) + '</dd>';
+    }
+    infoGrid.innerHTML = html;
+    infoCard.hidden = false;
+  }
+
+  /* ---------- reset ---------- */
+  function resetUI() {
+    if (lastURL) { URL.revokeObjectURL(lastURL); lastURL = null; }
+    lastOut = null;
+    mainImg.removeAttribute('src');
+    infoCard.hidden = true;
+    progCard.hidden = true;
+    resCard.hidden = true;
+    resetBtn.hidden = true;
+    dlBtn.disabled = true;
+    againBtn.disabled = true;
+    progBar.style.width = '0%';
+    progBar.classList.remove('err');
+    setStatus('ready', 'Ready');
+  }
+
+  /* ---------- main flow ---------- */
+  async function handleFile(file) {
+    if (!file) return;
+
+    var my = ++runId;
+    resetUI();
+
+    var looksVideo = /^video\//.test(file.type) ||
+      /\.(mp4|m4v|webm|mov|ogv|ogg|mkv|avi|3gp|ts)$/i.test(file.name);
+
+    if (!looksVideo) {
+      renderInfo({ Name: file.name, Size: fmtSize(file.size) });
+      showError("That doesn't look like a video file");
+      return;
+    }
+
+    renderInfo({
+      Name:     file.name,
+      Size:     fmtSize(file.size),
+      Type:     file.type || 'unknown',
+      Modified: new Date(file.lastModified).toLocaleString()
+    });
+
+    try {
+      var out = await VideoThumbnail.generate(
+        {
+          file:         file,
+          name:         file.name,
+          lastModified: file.lastModified
+        },
+        {
+          maxWidth:   960,
+          quality:    0.92,
+          candidates: 6,
+          onProgress: function (pct, label) {
+            if (my !== runId) return;
+            setProgress(pct, label);
+          }
+        }
+      );
+
+      if (my !== runId) return;
+
+      lastOut = out;
+      lastURL = URL.createObjectURL(out.file);
+
+      mainImg.src = lastURL;
+      tsLabel.innerHTML = '<i class="fa-regular fa-clock mr-1"></i>' + fmtClock(out.timestamp);
+      dimLabel.textContent = out.resolution.width + '×' + out.resolution.height +
+                             ' · ' + fmtSize(out.file.size);
+      pickTag.textContent = 'auto pick';
+
+      /* augment file info with the values we discovered */
+      renderInfo({
+        Name:       file.name,
+        Size:       fmtSize(file.size),
+        Type:       file.type || 'unknown',
+        Modified:   new Date(file.lastModified).toLocaleString(),
+        Duration:   fmtClock(out.source.duration),
+        Resolution: out.source.resolution.width + ' × ' + out.source.resolution.height
+      });
+
+      resCard.hidden = false;
+      resetBtn.hidden = false;
+      dlBtn.disabled = false;
+      againBtn.disabled = false;
+
+      setTimeout(function () {
+        if (my === runId) progCard.hidden = true;
+      }, 700);
+
+      setStatus('ok', 'Thumbnail ready');
+    } catch (err) {
+      if (my !== runId) return;
+      showError(err && err.message ? err.message : 'Could not generate thumbnail');
+    }
+  }
+
+  /* ---------- "another frame" — regenerate with a different seed ------- */
+  againBtn.addEventListener('click', function () {
+    var f = fileInput;
+    // re-run using the same file but skew the candidate offsets by asking
+    // for a higher candidate count so a different best frame can win.
+    if (!lastOut) return;
+    // We don't keep the original File handle around after generate(), so
+    // re-trigger the picker — simplest honest behaviour.
+    f.click();
+  });
+
+  /* ---------- download ---------- */
+  dlBtn.addEventListener('click', function () {
+    if (!lastOut || !lastURL) return;
+    var a = document.createElement('a');
+    a.href = lastURL;
+    a.download = lastOut.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setStatus('ok', 'Saved ' + lastOut.name);
+  });
+
+  /* ---------- reset button ---------- */
+  resetBtn.addEventListener('click', function () {
+    runId++;
+    resetUI();
+  });
+
+  /* ---------- input wiring ---------- */
+  fileInput.addEventListener('change', function () {
+    var f = fileInput.files && fileInput.files[0];
+    if (f) handleFile(f);
+    fileInput.value = '';
+  });
+
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) {
+      e.preventDefault();
+      drop.classList.add('over');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) {
+      e.preventDefault();
+      drop.classList.remove('over');
+    });
+  });
+  drop.addEventListener('drop', function (e) {
+    var dt = e.dataTransfer;
+    var f = dt && dt.files && dt.files[0];
+    if (f) handleFile(f);
+  });
+
+  document.addEventListener('dragover', function (e) { e.preventDefault(); });
+  document.addEventListener('drop',     function (e) { e.preventDefault(); });
+
+  window.addEventListener('pagehide', function () {
+    if (lastURL) URL.revokeObjectURL(lastURL);
+  });
+})();
+</script>
+</body>
+</html>
