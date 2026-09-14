@@ -189,19 +189,42 @@ export default async function handler(req, res) {
 
       const pathname = folder + filename;
 
-      const buffer = fs.readFileSync(file.filepath);
-      const blob = await put(pathname, buffer, {
-        access: 'public',
-        contentType: file.mimetype || 'application/octet-stream',
-        token: BLOB_READ_WRITE_TOKEN,
-        addRandomSuffix: false,
-        cacheControlMaxAge: 60,
-        metadata: {
-          lastModified: String(lastModified),
-        },
-      });
+      // Build metadata: lastModified plus every extra form field.
+// formidable may hand fields back as string[] or string, so normalise.
+const RESERVED = new Set(['image', 'lastModified']);
+const MAX_VALUE_LENGTH = 800;
+const metadata = { lastModified: String(lastModified) };
 
-      return res.status(200).json(blob);
+for (const [rawKey, rawVal] of Object.entries(fields)) {
+  if (RESERVED.has(rawKey)) continue;
+  
+  // Vercel Blob metadata keys: [a-zA-Z0-9_-], max 64 chars
+  const key = String(rawKey).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
+  if (!key) continue;
+  
+  let val = Array.isArray(rawVal) ? rawVal[0] : rawVal;
+  if (val == null) continue;
+  
+  val = String(val);
+  if (val.length > MAX_VALUE_LENGTH) {
+    val = val.slice(0, MAX_VALUE_LENGTH) + '…';
+  }
+  
+  metadata[key] = val;
+}
+
+const buffer = fs.readFileSync(file.filepath);
+const blob = await put(pathname, buffer, {
+  access: 'public',
+  contentType: file.mimetype || 'application/octet-stream',
+  token: BLOB_READ_WRITE_TOKEN,
+  addRandomSuffix: false,
+  cacheControlMaxAge: 60,
+  metadata: metadata,
+});
+
+      return res.status(200).json({ ...blob, metadata });
+      
     } catch (error) {
       console.error('Upload error:', error);
       return res.status(500).json({ error: error.message || 'Upload failed' });
